@@ -1,0 +1,119 @@
+Disadvatanges of flatfiles
+====================
+Linear search
+Data redundancy
+Unstructured
+Breach of security
+Memory issues
+Non-concurrent access
+CRUD operations takes time
+
+OLTP --> DB --> Row oriented file formats
+OLAP --> DWH --> Column oriented file formats
+
+ACID
+====
+Atomicity
+Consistency
+Isolation
+Durability
+
+Databases
+=========
+Hierarchical db's
+Networking db's
+Relational db's (rdbms)
+Relation --> Table'
+nosql db's
+
+nosql
+=====
+CAP
+key value --> redis
+columnar --> cassandra
+doc --> mongo
+graph --> neo4j
+
+aws --> dynamo db
+azure --> cosmos db
+
+Data Science
+============
+Data engineering --> collect, store, process, manage
+[sql, excel, hadoop/s3/blob, rdbms, dwh, spark]
+
+Data Analysis --> Pandas, SQL
+
+BI --> PowerBI, Tableau, Sigma
+
+ML, DL, AI, Solution development
+
+Transactions --> DB --> CRUD
+ETL/ELT --> Glue/ADF
+DWH (Snowflake/Redshift/Synapse) --> BI
+
+db --> Collection of files and programs ; 
+programs allows the user to access files and do CRUD operations
+Pre-defined structure --> schema --> enforce schema
+Concurrent operations
+Data redundancy can be avoided
+
+Users of DB --> DBA, Designer, Developer, End-users
+RDBMS --> Oracle (sql,mysql), Post-gres, IBM db2, MS sql server, Maria db
+Data model --> Designing the functionality and structure of the database
+ER model --> Pictorial representation of the data model
+Schema --> Description of the database
+
+Keys
+====
+Primary key --> Unique identifier, not null
+Candidate key --> Combination of more than 1 column for primary key attribute
+Foreign key / referential integrity --> Referring to the primary key of another table
+Alternate key --> Any other keys that are not a primary key
+
+Normalization
+============
+1st NF --> All the attributes in the table should be atomic
+2nd NF --> 1 nf & no partial dependency between non-key attributes and key attributes
+3rd NF
+Boyce code NF & higher nf
+
+ER model
+--------------
+Entity Relationship Models : Entity, Cardinality (Degree of relationship), Shapes 
+
+12. Shapes : 
+	Rectangle : Entity/Table
+	Ellipses : Attributes
+	Diamonds : Relationship
+	Lines : Link b/w Attributes, Entities & Relationships
+                  Double Ellipses : Multi Valued Attributes
+	Dashed Ellipses : Derived Attributes
+	Double Lines : Total Participation
+	Dashed Lines : Without Primary key
+	Solid Line : Stronger Entity
+	Double Rectangles : Weak Entity
+                  Single Line : Partial Participation
+
+Cardinality --> 1 to 1, 1 to M, M to 1, M to M
+
+# Make a ER diagram having tables as follows,
+
+1. Person  --> Driver_ID, Name, Address
+
+2. Car --> License_no, Model, YOM
+
+3. Accident --> Report_num, Date, Location
+
+ Participated --> Driver_ID, License, Damage_fine, Report_num 
+
+
+
+
+
+
+
+
+
+
+
