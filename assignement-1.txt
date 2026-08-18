@@ -1,0 +1,25 @@
+1. Calculate the average length of all the country names. Any fractional components must be rounded to the nearest whole number.
+
+Hint: Hint: Use CHAR_LENGTH() to count characters, AVG() to calculate the average, and ROUND() to remove the fractional part.
+
+2. How many unique departments have employees currently working in them?
+
+Hint: Hint: Count distinct DEPARTMENT_ID values. NULL department IDs should not be counted; COUNT(DISTINCT ...) already ignores NULL.
+
+3. For employees who quit the organization, find out how many years the employees were employed. Assume that the year consists of 365.25 days. 
+Also retrieve EMPLOYEE_ID, JOB_ID, START_DATE, and END_DATE for these employees.
+
+Hint: Hint: MySQL does not subtract DATE values to produce the number of days in the same way as Oracle. Use DATEDIFF(END_DATE, START_DATE), add 1 for an inclusive interval, then divide by 365.25.
+
+4. Query the JOBS table and return a single expression of the form: The Job Id for the <job_title’s> job is: <job_id>. Take note that the job_title should have an apostrophe and an “s” appended to it to read more naturally. 
+Alias this column expression as “Job Description” using the AS keyword
+
+Hint: Hint: Oracle uses || for concatenation. MySQL uses CONCAT(). To include a literal apostrophe inside a single-quoted string, use two single quotes: ''''.
+
+5. Retrieve a list of DEPARTMENT_NAME values that end with the three letters “ing” and whose second character is “a”.
+
+Hint: In LIKE, '_' represents exactly one character and '%' represents zero or more characters. Build the pattern from left to right.
+
+6. Extract JOB_TITLE, MIN_SALARY, and MAX_SALARY, plus an expression called VARIANCE, which is MAX_SALARY - MIN_SALARY. Include only JOB_TITLE values containing either “President” or “Manager”. Sort descending by VARIANCE; if tied, sort JOB_TITLE in reverse alphabetic order.
+
+Hint: Hint: Use MAX_SALARY - MIN_SALARY as the calculated column. Use LIKE with OR for the two title patterns. MySQL allows the SELECT alias in ORDER BY.
