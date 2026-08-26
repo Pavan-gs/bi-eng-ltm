@@ -1,0 +1,331 @@
+Snowsight
+│
+├── Projects
+│    ├── Workspaces       ← where we'll write SQL
+│    └── Notebooks        ← ignore for today's DWH SQL lab
+│
+├── Catalog
+│    └── Database Explorer ← databases, schemas, tables, views
+│
+├── Compute
+│    └── Warehouses         ← our compute
+│
+├── Monitoring
+│    └── Query History      ← later, performance
+│
+└── Administration          ← mostly ignore for now
+
+
+
+DATABASE
+  = container for data objects
+
+SCHEMA
+  = logical grouping inside database
+
+TABLE
+  = actual data
+
+WAREHOUSE
+  = compute that runs SQL
+
+
+
+
+
+
+
+DWH_TRAINING
+│
+├── RAW
+│    └── Source-like data
+│
+├── STAGING
+│    └── Cleaning / transformation
+│
+├── DWH
+│    └── Fact + Dimension tables
+│
+└── MART
+     └── Reporting / business-facing data
+
+
+
+
+
+-- ============================================================
+-- SNOWFLAKE DWH TRAINING LAB
+-- ============================================================
+
+
+-- ============================================================
+-- 1. CREATE COMPUTE
+-- ============================================================
+
+-- A virtual warehouse provides compute resources.
+-- X-Small is sufficient for this training lab.
+-- AUTO_SUSPEND helps avoid unnecessary compute usage.
+
+CREATE OR REPLACE WAREHOUSE DWH_LAB_WH
+WITH
+    WAREHOUSE_SIZE = 'XSMALL'
+    AUTO_SUSPEND = 60
+    AUTO_RESUME = TRUE;
+
+USE WAREHOUSE DWH_LAB_WH;
+
+
+-- ============================================================
+-- 2. CREATE DATABASE
+-- ============================================================
+
+-- A database is a high-level container for data objects.
+
+CREATE OR REPLACE DATABASE DWH_TRAINING;
+
+USE DATABASE DWH_TRAINING;
+
+
+-- ============================================================
+-- 3. CREATE SCHEMAS
+-- ============================================================
+
+-- RAW      = source-like data
+-- STAGING  = cleaning/transformation
+-- DWH      = dimensional warehouse
+-- MART     = business-facing analytical data
+
+CREATE OR REPLACE SCHEMA RAW;
+
+CREATE OR REPLACE SCHEMA STAGING;
+
+CREATE OR REPLACE SCHEMA DWH;
+
+CREATE OR REPLACE SCHEMA MART;
+
+
+-- ============================================================
+-- 4. EXPLORE OBJECTS
+-- ============================================================
+
+SHOW DATABASES;
+
+SHOW SCHEMAS IN DATABASE DWH_TRAINING;
+
+
+-- ============================================================
+-- 5. CREATE RAW TABLE
+-- ============================================================
+
+USE SCHEMA RAW;
+
+CREATE OR REPLACE TABLE RAW_ORDERS
+(
+    ORDER_ID       VARCHAR,
+    ORDER_DATE     DATE,
+    CUSTOMER_ID    VARCHAR,
+    REGION         VARCHAR,
+    AMOUNT         NUMBER(12,2)
+);
+
+
+-- ============================================================
+-- 6. LOAD SAMPLE RAW DATA
+-- ============================================================
+
+INSERT INTO RAW_ORDERS
+VALUES
+('O1001', '2026-01-05', 'C101', 'West', 2000),
+('O1002', '2026-01-07', 'C102', 'West', 1500),
+('O1003', '2026-01-10', 'C101', 'North', 4500),
+('O1004', '2026-02-02', 'C103', 'South', 1000),
+('O1005', '2026-02-10', 'C104', 'West', 3200);
+
+
+-- ============================================================
+-- 7. VIEW RAW DATA
+-- ============================================================
+
+SELECT *
+FROM RAW_ORDERS;
+
+
+-- ============================================================
+-- 8. CREATE STAGING TABLE
+-- ============================================================
+
+CREATE OR REPLACE TABLE DWH_TRAINING.STAGING.CLEAN_ORDERS
+AS
+SELECT
+    ORDER_ID,
+    ORDER_DATE,
+    CUSTOMER_ID,
+    UPPER(TRIM(REGION)) AS REGION,
+    AMOUNT
+FROM DWH_TRAINING.RAW.RAW_ORDERS;
+
+
+-- ============================================================
+-- 9. VIEW STAGING DATA
+-- ============================================================
+
+SELECT *
+FROM DWH_TRAINING.STAGING.CLEAN_ORDERS;
+
+
+-- ============================================================
+-- 10. CREATE CUSTOMER DIMENSION
+-- ============================================================
+
+CREATE OR REPLACE TABLE DWH_TRAINING.DWH.DIM_CUSTOMER
+(
+    CUSTOMER_KEY  NUMBER,
+    CUSTOMER_ID   VARCHAR,
+    CUSTOMER_NAME VARCHAR,
+    CITY          VARCHAR,
+    SEGMENT       VARCHAR
+);
+
+
+-- ============================================================
+-- 11. LOAD CUSTOMER DIMENSION
+-- ============================================================
+
+INSERT INTO DWH_TRAINING.DWH.DIM_CUSTOMER
+VALUES
+(1, 'C101', 'Ravi',  'Mumbai', 'Retail'),
+(2, 'C102', 'Priya', 'Pune',   'Premium'),
+(3, 'C103', 'Arun',  'Delhi',  'Retail'),
+(4, 'C104', 'Sneha', 'Mumbai', 'Premium');
+
+
+-- ============================================================
+-- 12. CREATE FACT TABLE
+-- ============================================================
+
+-- IMPORTANT:
+-- Grain:
+-- One row represents ONE SALES TRANSACTION.
+
+CREATE OR REPLACE TABLE DWH_TRAINING.DWH.FACT_SALES
+(
+    SALES_KEY     NUMBER,
+    ORDER_ID      VARCHAR,
+    CUSTOMER_KEY  NUMBER,
+    ORDER_DATE    DATE,
+    REGION        VARCHAR,
+    QUANTITY      NUMBER,
+    SALES_AMOUNT  NUMBER(12,2)
+);
+
+
+-- ============================================================
+-- 13. LOAD FACT TABLE
+-- ============================================================
+
+INSERT INTO DWH_TRAINING.DWH.FACT_SALES
+VALUES
+(1, 'O1001', 1, '2026-01-05', 'West',  2, 2000),
+(2, 'O1002', 2, '2026-01-07', 'West',  1, 1500),
+(3, 'O1003', 1, '2026-01-10', 'North', 3, 4500),
+(4, 'O1004', 3, '2026-02-02', 'South', 1, 1000),
+(5, 'O1005', 4, '2026-02-10', 'West',  2, 3200);
+
+
+-- ============================================================
+-- 14. EXPLORE DWH TABLES
+-- ============================================================
+
+SHOW TABLES IN SCHEMA DWH_TRAINING.DWH;
+
+
+-- ============================================================
+-- 15. BASIC ANALYTICAL QUERY
+-- ============================================================
+
+-- Revenue by customer.
+
+SELECT
+    c.CUSTOMER_NAME,
+    c.SEGMENT,
+    SUM(f.SALES_AMOUNT) AS TOTAL_REVENUE
+FROM DWH_TRAINING.DWH.FACT_SALES f
+JOIN DWH_TRAINING.DWH.DIM_CUSTOMER c
+    ON f.CUSTOMER_KEY = c.CUSTOMER_KEY
+GROUP BY
+    c.CUSTOMER_NAME,
+    c.SEGMENT
+ORDER BY
+    TOTAL_REVENUE DESC;
+
+
+-- ============================================================
+-- 16. CREATE SIMPLE DATA MART
+-- ============================================================
+
+CREATE OR REPLACE TABLE DWH_TRAINING.MART.CUSTOMER_REVENUE
+AS
+SELECT
+    c.CUSTOMER_NAME,
+    c.SEGMENT,
+    SUM(f.SALES_AMOUNT) AS TOTAL_REVENUE
+FROM DWH_TRAINING.DWH.FACT_SALES f
+JOIN DWH_TRAINING.DWH.DIM_CUSTOMER c
+    ON f.CUSTOMER_KEY = c.CUSTOMER_KEY
+GROUP BY
+    c.CUSTOMER_NAME,
+    c.SEGMENT;
+
+
+-- ============================================================
+-- 17. VIEW DATA MART
+-- ============================================================
+
+SELECT *
+FROM DWH_TRAINING.MART.CUSTOMER_REVENUE;
+
+
+-- ============================================================
+-- 18. CHECK CURRENT CONTEXT
+-- ============================================================
+
+SELECT
+    CURRENT_DATABASE(),
+    CURRENT_SCHEMA(),
+    CURRENT_WAREHOUSE();
+
+
+-- ============================================================
+-- 19. WAREHOUSE MANAGEMENT
+-- ============================================================
+
+-- Suspend compute when finished.
+
+ALTER WAREHOUSE DWH_LAB_WH SUSPEND;
+
+-- Resume it when needed.
+
+ALTER WAREHOUSE DWH_LAB_WH RESUME;
+
+
+                 SNOWFLAKE ACCOUNT
+                        |
+              +---------+---------+
+              |                   |
+          COMPUTE              STORAGE
+              |                   |
+        DWH_LAB_WH          DWH_TRAINING
+                                  |
+             +--------------------+--------------------+
+             |                    |                    |
+            RAW                STAGING                DWH
+             |                    |                    |
+       RAW_ORDERS          CLEAN_ORDERS         DIM_CUSTOMER
+                                                    +
+                                                FACT_SALES
+                                                     |
+                                                     v
+                                                   MART
+                                                     |
+                                                     v
+                                                ANALYTICS
