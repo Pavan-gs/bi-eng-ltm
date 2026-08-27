@@ -1,3 +1,14 @@
+IAAS --> VM, RAM, COMPUTE, NETWORKING, STORAGE
+SAAS --> GMAIL
+PAAS --> PLAYSTORE
+
+MANAGED SERVICES
+================
+DATABASE --> AWS RDS/DYNAMO DB, MS-SQL SERVER/COSMOS
+DWH --> REDSHIFT, SYNAPSE, BIG QUERY (SNOWFLAKE)
+STORAGE --> DATA LAKE
+
+
 Snowsight
 │
 ├── Projects
@@ -15,7 +26,7 @@ Snowsight
 │
 └── Administration          ← mostly ignore for now
 
-
+===================================================
 
 DATABASE
   = container for data objects
@@ -29,11 +40,7 @@ TABLE
 WAREHOUSE
   = compute that runs SQL
 
-
-
-
-
-
+===================================================
 
 DWH_TRAINING
 │
@@ -48,9 +55,6 @@ DWH_TRAINING
 │
 └── MART
      └── Reporting / business-facing data
-
-
-
 
 
 -- ============================================================
@@ -329,3 +333,464 @@ ALTER WAREHOUSE DWH_LAB_WH RESUME;
                                                      |
                                                      v
                                                 ANALYTICS
+
+
+1. Data loading
+   ↓
+2. Stages
+   ↓
+3. File formats
+   ↓
+4. COPY INTO
+   ↓
+5. External/internal data loading concepts
+   ↓
+6. ETL vs ELT
+   ↓
+7. Fact & Dimension modelling
+   ↓
+8. Slowly Changing Dimensions
+   ↓
+9. Time Travel
+   ↓
+10. Micro-partitions
+   ↓
+11. Clustering
+   ↓
+12. Query performance / Query Profile
+
+
+CSV file
+   ↓
+Snowflake Stage
+   ↓
+File Format
+   ↓
+COPY INTO
+   ↓
+RAW table
+   ↓
+STAGING
+   ↓
+DWH
+
+===============================================
+
+A stage is a location where Snowflake can access files before loading them into tables.
+
+For today's lab, we'll use an internal stage.
+
+Think:
+
+Your CSV file
+     ↓
+Snowflake Stage
+     ↓
+COPY INTO
+     ↓
+Snowflake Table
+
+===============
+
+Internal Stage
+    ↓
+Snowflake manages the storage location
+
+External Stage
+    ↓
+Files remain in external cloud storage
+    ↓
+Azure Blob / ADLS
+    ↓
+Snowflake reads them
+
+
+#  Create the RAW table
+
+USE DATABASE DWH_TRAINING;
+USE SCHEMA RAW;
+
+CREATE OR REPLACE TABLE RAW_CUSTOMERS
+(
+    CUSTOMER_ID   VARCHAR,
+    CUSTOMER_NAME VARCHAR,
+    CITY          VARCHAR,
+    SEGMENT       VARCHAR
+);
+
+SELECT *
+FROM RAW_CUSTOMERS;
+
+# Create an internal stage
+
+CREATE OR REPLACE STAGE CUSTOMER_STAGE;
+
+SHOW STAGES;
+--------------
+CUSTOMERS.CSV
+      ↓
+CUSTOMER_STAGE
+      ↓
+RAW_CUSTOMERS
+
+
+Catalog → DWH_TRAINING → RAW → Stages
+
+CUSTOMER_STAGE
+    |
+    └── customers.csv
+
+# Create a File Format
+
+CREATE OR REPLACE FILE FORMAT CUSTOMER_CSV_FORMAT
+TYPE = CSV
+SKIP_HEADER = 1
+FIELD_OPTIONALLY_ENCLOSED_BY = '"';
+
+SELECT
+    $1,
+    $2,
+    $3,
+    $4
+FROM @CUSTOMER_STAGE/customers.csv
+(
+    FILE_FORMAT => CUSTOMER_CSV_FORMAT
+);
+
+$1 → CUSTOMER_ID
+$2 → CUSTOMER_NAME
+$3 → CITY
+$4 → SEGMENT
+
+The data is not in the table yet.
+
+# COPY INTO the table
+
+COPY INTO RAW_CUSTOMERS
+FROM @CUSTOMER_STAGE/customers.csv
+FILE_FORMAT = (
+    FORMAT_NAME = CUSTOMER_CSV_FORMAT
+);
+
+-------------------------------
+customers.csv
+     |
+     v
+CUSTOMER_STAGE
+     |
+     | COPY INTO
+     v
+RAW_CUSTOMERS
+     |
+     v
+STAGING
+     |
+     v
+   DWH
+
+
+SELECT
+    COUNT(*)
+FROM RAW_CUSTOMERS;
+
+Snowflake's load history through Snowsight
+Which file?
+When?
+How many rows?
+Was it loaded?
+Were there errors?
+
+=======================
+
+COPY INTO RAW_CUSTOMERS
+FROM @CUSTOMER_STAGE/customers_bad.csv
+FILE_FORMAT = (
+    FORMAT_NAME = CUSTOMER_CSV_FORMAT
+);
+-----------------------
+COPY INTO RAW_CUSTOMERS
+FROM @CUSTOMER_STAGE/customers_bad.csv
+FILE_FORMAT = (
+    FORMAT_NAME = CUSTOMER_CSV_FORMAT
+)
+ON_ERROR = 'CONTINUE';
+
+ON_ERROR tells Snowflake what to do when it encounters problematic records during loading.
+
+ABORT_STATEMENT
+CONTINUE
+SKIP_FILE
+
+'''
+Stage
+ = location
+
+File format
+ = interpretation rules
+
+COPY INTO
+ = loading operation
+'''
+
+
+Internal vs External Stage
+
+Source
+  ↓
+Upload
+  ↓
+Snowflake internal stage
+  ↓
+COPY INTO
+  ↓
+Table
+ 
+                   
+External
+      
+Source system
+     ↓
+Azure Data Lake / Blob Storage
+     ↓
+External Stage
+     ↓
+COPY INTO
+     ↓
+Snowflake
+
+
+LIST @CUSTOMER_STAGE;
+
+SELECT *
+FROM @CUSTOMER_STAGE/customers.csv
+(
+    FILE_FORMAT => CUSTOMER_CSV_FORMAT
+);
+
+
+SELECT *
+FROM @CUSTOMER_STAGE/customers.csv
+(
+    FILE_FORMAT => CUSTOMER_CSV_FORMAT
+);
+
+"Show me what's inside this staged file."
+
+COPY INTO RAW_CUSTOMERS
+FROM @CUSTOMER_STAGE/customers.csv
+...
+
+"Load this file into my table."
+
+
+                    SNOWFLAKE
+                       |
+                DWH_TRAINING
+                       |
+            +----------+----------+
+            |                     |
+           RAW                  STAGING
+            |                     |
+     RAW_CUSTOMERS          CLEAN_ORDERS
+            |
+            ↑
+            |
+     COPY INTO
+            |
+            ↑
+            |
+   CUSTOMER_STAGE
+            |
+            ↑
+            |
+     customers.csv
+
+# Conclusion
+
+Stage
+File Format
+COPY INTO
+Internal Stage
+External Stage
+
+-----------------=============----------------------
+
+1. The problem with simply INSERTing again
+
+Suppose today's DWH contains:
+
+C101 | Ravi  | Mumbai
+C102 | Priya | Pune
+C103 | Arun  | Delhi
+C104 | Sneha | Mumbai
+
+Tomorrow's source sends:
+
+C101 | Ravi  | Bangalore
+C102 | Priya | Pune
+C105 | Meena | Chennai
+
+There are three different situations:
+
+C101 → existing customer + changed city
+C102 → existing customer + no change
+C105 → completely new customer
+
+We therefore need logic:
+
+If customer exists
+       ↓
+     UPDATE
+
+If customer doesn't exist
+       ↓
+     INSERT
+
+USE DATABASE DWH_TRAINING;
+
+CREATE OR REPLACE TABLE DWH.DIM_CUSTOMER_INCREMENTAL
+(
+    CUSTOMER_ID   VARCHAR,
+    CUSTOMER_NAME VARCHAR,
+    CITY          VARCHAR,
+    SEGMENT       VARCHAR
+);
+
+INSERT INTO DWH.DIM_CUSTOMER_INCREMENTAL
+VALUES
+('C101', 'Ravi',  'Mumbai', 'Retail'),
+('C102', 'Priya', 'Pune',   'Premium'),
+('C103', 'Arun',  'Delhi',  'Retail'),
+('C104', 'Sneha', 'Mumbai', 'Premium');
+
+SELECT *
+FROM DWH.DIM_CUSTOMER_INCREMENTAL
+ORDER BY CUSTOMER_ID;
+
+# Let's simulate tomorrow's incoming data
+
+CREATE OR REPLACE TEMPORARY TABLE STAGING.CUSTOMER_INCREMENTAL_LOAD
+(
+    CUSTOMER_ID   VARCHAR,
+    CUSTOMER_NAME VARCHAR,
+    CITY          VARCHAR,
+    SEGMENT       VARCHAR
+);
+
+INSERT INTO STAGING.CUSTOMER_INCREMENTAL_LOAD
+VALUES
+('C101', 'Ravi',  'Bangalore', 'Retail'),
+('C102', 'Priya', 'Pune',      'Premium'),
+('C105', 'Meena', 'Chennai',   'Premium');
+
+
+C101 → changed
+C102 → unchanged
+C105 → new
+
+MERGE
+
+MERGE INTO target
+USING source
+ON matching_condition
+
+WHEN MATCHED THEN
+    UPDATE ...
+
+WHEN NOT MATCHED THEN
+    INSERT ...;
+
+
+
+             SOURCE
+                |
+                v
+        Find matching key
+           /         \
+        MATCH       NO MATCH
+          |             |
+       UPDATE         INSERT
+
+MERGE INTO DWH.DIM_CUSTOMER_INCREMENTAL AS target
+USING STAGING.CUSTOMER_INCREMENTAL_LOAD AS source
+ON target.CUSTOMER_ID = source.CUSTOMER_ID
+WHEN MATCHED THEN
+    UPDATE SET
+        target.CUSTOMER_NAME = source.CUSTOMER_NAME,
+        target.CITY          = source.CITY,
+        target.SEGMENT       = source.SEGMENT
+
+WHEN NOT MATCHED THEN
+    INSERT
+    (
+        CUSTOMER_ID,
+        CUSTOMER_NAME,
+        CITY,
+        SEGMENT
+    )
+    VALUES
+    (
+        source.CUSTOMER_ID,
+        source.CUSTOMER_NAME,
+        source.CITY,
+        source.SEGMENT
+    );
+
+SELECT *
+FROM DWH.DIM_CUSTOMER_INCREMENTAL
+ORDER BY CUSTOMER_ID;
+
+C101 | Ravi  | Bangalore | Retail
+C102 | Priya | Pune      | Premium
+C103 | Arun  | Delhi     | Retail
+C104 | Sneha | Mumbai    | Premium
+C105 | Meena | Chennai   | Premium
+
+For C101:
+
+Target:
+C101 | Ravi | Mumbai
+
+Source:
+C101 | Ravi | Bangalore
+
+MATCHED
+   ↓
+UPDATE
+   ↓
+C101 | Ravi | Bangalore
+
+For C105:
+
+Target:
+No C105
+
+Source:
+C105 | Meena | Chennai
+
+NOT MATCHED
+   ↓
+INSERT
+
+What about C102?
+
+C102 exists in both:
+
+Target → C102 | Priya | Pune
+Source → C102 | Priya | Pune
+
+====================================
+
+Idempotency
+
+
+
+
+
+
+
+
+
+
+
+
